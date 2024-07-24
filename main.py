@@ -1,6 +1,10 @@
 import simpy
 import random
 
+import sys
+# sys.stdin = open('input.txt', 'r')
+sys.stdout = open('output.txt', 'w')
+
 SIMULATION_TIME = 1 * 24 * 60  # simulation time (in mins)
 VESSEL_AVG_ARRIVAL_INTERVAL = 5 * 60  # vessels average arrival time (in mins)
 CONTAINERS_PER_VESSEL = 150  # no of containers per vessel
@@ -22,7 +26,7 @@ class ContainerSimulation:
     def now(self):
         return self.env.now
     
-    def process_for_unloading_containers(self, vessel_id):
+    def move_containers_from_vessels(self, vessel_id):
         '''
         unloading containers process request to berth, once it berth 
         then all of its 150 containers parallely unloaded by the 2 cranes and load onto the trucks
@@ -44,7 +48,18 @@ class ContainerSimulation:
                 crane_req = self.cranes.request()
                 ''' container requesting for crane '''
                 yield crane_req
-                yield self.env.process(self.Process_for_loading_container_on_truck(vessel_id, container_no))
+                truck_req = self.trucks.request()
+
+                yield truck_req | self.env.timeout(0)
+
+                if truck_req.triggered:
+                    print(f"Quay crane moving container {container_no} from vessel {vessel_id} at time {self.now():.2f}")
+                    yield self.env.timeout(MOVE_CONTAINER_TIME)
+                    self.env.process(self.move_container_to_yard(vessel_id, container_no))
+                    self.trucks.release(truck_req)
+                else: 
+                    yield crane_req
+                    self.env.process(self.move_containers_from_vessels(vessel_id))
                 ''' crane released '''
                 self.cranes.release(crane_req)
 
@@ -56,21 +71,14 @@ class ContainerSimulation:
         print(f"Vessel {vessel_id} leaving at time {t:.2f}")
         print(f"Vessel {vessel_id} turn_around time is {vessel_turn_around_time:.2f}")
 
-    def Process_for_loading_container_on_truck(self, vessel_id, container_no):
-        trucks_req = self.trucks.request()
-        ''' crane requesting for truck '''
-        yield trucks_req
-    
-        print(f"Quay crane moving container {container_no} from vessel {vessel_id} at time {self.now():.2f}")
-        yield self.env.timeout(MOVE_CONTAINER_TIME)  # crane moving container from the vessel
-        
+    def move_container_to_yard(self, vessel_id, container_no):
         print(f"Truck transporting container {container_no} from vessel {vessel_id} at time {self.now():.2f}")
+
         yield self.env.timeout(TRUCK_TRIP_ROUND_TIME)  # truck leaving the container to yard block
         
         print(f"Truck returned after transporting container {container_no} from vessel {vessel_id} at time {self.now():.2f}")
-        ''' truck released '''
-        self.trucks.release(trucks_req)
     
+
 def vessel_generator(env):
     vessel = ContainerSimulation(env, AVAIL_BERTHS, AVAIL_CRANES, AVAIL_TRUCKS)
     
@@ -79,7 +87,7 @@ def vessel_generator(env):
         ''' 1/avg, wait for average interval between vessel arrival '''
         yield env.timeout(random.expovariate(1 / VESSEL_AVG_ARRIVAL_INTERVAL))  
         vessel_id += 1
-        env.process(vessel.process_for_unloading_containers(vessel_id))  # start process for berthing & unloading containers
+        env.process(vessel.move_containers_from_vessels(vessel_id))  # start process for berthing & unloading containers
 
 if __name__ == '__main__':
     random.seed(RANDOM_SEED)
