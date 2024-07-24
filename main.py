@@ -84,6 +84,7 @@ def vessel_generator(env):
 if __name__ == '__main__':
     random.seed(RANDOM_SEED)
 
+    print("Container Simulation: ")
     # Create an environment and start the vessel generation
     env = simpy.Environment()
     env.process(vessel_generator(env))
