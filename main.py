@@ -120,7 +120,7 @@ def vessel_generator(env):
 if __name__ == '__main__':
     random.seed(RANDOM_SEED)
     
-    SIMULATION_TIME = int(input('Enter Simulation time(in days): ')) * 24 * 60 # converting in minutes
+    SIMULATION_TIME = float(input('Enter Simulation time(in days): ')) * 24 * 60 # converting in minutes
     print("Container Simulation: ")
     # Create an environment and start the vessel generation
     env = simpy.Environment()
