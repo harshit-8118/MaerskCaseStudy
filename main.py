@@ -22,7 +22,6 @@ class LogDetails:
     '''
 
     def __init__(self):
-        print("constructor called")
         self.logs = {}
 
     def insertVessel(self, vessel_id, arrival, departure):
