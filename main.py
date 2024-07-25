@@ -12,11 +12,36 @@ AVAIL_TRUCKS = 3  # no of trucks in service
 MOVE_CONTAINER_TIME = 3  # time elapsed by crane to move container to the truck (in mins)
 TRUCK_TRIP_ROUND_TIME = 6  # time taken by trucks to move container to the yard (in mins)
 RANDOM_SEED = 11
+obj = None
 
 
-class ContainerSimulation:
+class LogDetails:
+    '''
+    LogDetails class stores details for each vessel and their corresponding containers.
+    details include are arrival time, departure time, 
+    '''
+
+    def __init__(self):
+        print("constructor called")
+        self.logs = {}
+
+    def insertVessel(self, vessel_id, arrival, departure):
+        if vessel_id not in self.logs:
+            self.logs[vessel_id] = {"arrival": 0, "departure": 0, "containers": 0}
+
+        self.logs[vessel_id]["arrival"] = arrival
+        self.logs[vessel_id]["departure"] = departure
+
+    def addContainer(self, vessel_id):
+        if vessel_id not in self.logs:
+            self.logs[vessel_id] = {"arrival": 0, "departure": 0, "containers": 0}
+        self.logs[vessel_id]["containers"] += 1
+
+
+class ContainerSimulation(LogDetails):  # inherited logDetails class
     
     def __init__(self, env, berths, cranes, trucks):
+        super().__init__()
         self.env = env
         self.berths = simpy.Resource(env, berths) 
         self.cranes = simpy.Resource(env, cranes)
@@ -52,6 +77,7 @@ class ContainerSimulation:
                 yield truck_req | self.env.timeout(0)
 
                 if truck_req.triggered:
+                    self.addContainer(vessel_id)
                     print(f"crane: Quay crane moving container {container_no} from vessel {vessel_id} at time {self.now():.2f}")
                     yield self.env.timeout(MOVE_CONTAINER_TIME)
                     self.env.process(self.move_container_to_yard(vessel_id, container_no))
@@ -66,9 +92,10 @@ class ContainerSimulation:
         self.berths.release(berth_request)
 
         t = self.now()
-        vessel_turn_around_time = t - arrival
+        turnaround_time = t - arrival
+        self.insertVessel(vessel_id, arrival, t)
         print(f"\nvessel: Vessel {vessel_id} leaving at time {t:.2f}")
-        print(f"vessel: Vessel {vessel_id} turn_around time is {vessel_turn_around_time:.2f}\n")
+        print(f"vessel: Vessel {vessel_id} turn_around time is {turnaround_time:.2f}\n")
 
     def move_container_to_yard(self, vessel_id, container_no):
         print(f"truck: Truck moving container {container_no} from vessel {vessel_id} at time {self.now():.2f}")
@@ -80,13 +107,16 @@ class ContainerSimulation:
 
 def vessel_generator(env):
     vessel = ContainerSimulation(env, AVAIL_BERTHS, AVAIL_CRANES, AVAIL_TRUCKS)
-    
+    global obj
+    obj = vessel
+
     vessel_id = 0
     while(True):
         ''' 1/avg, wait for average interval between vessel arrival '''
         yield env.timeout(random.expovariate(1 / VESSEL_AVG_ARRIVAL_INTERVAL))  
         vessel_id += 1
         env.process(vessel.move_containers_from_vessels(vessel_id))  # start process for berthing & unloading containers
+
 
 if __name__ == '__main__':
     random.seed(RANDOM_SEED)
@@ -99,3 +129,5 @@ if __name__ == '__main__':
 
     # Execute!
     env.run(SIMULATION_TIME)
+
+    # print(obj.logs)
